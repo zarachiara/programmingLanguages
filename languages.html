@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>CS164: Language Popularity</title>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src = "http://underscorejs.org/underscore-min.js"></script>
+  	<style type = "text/css">
+  			.axis path, 
+  			.axis line {
+  				fill: none; 
+  				stroke: black; 
+  				shape-rendering: crispEdges;
+  			}
+
+  			.axis text{
+  				font-family: sans-serif;
+  				font-size: 11px;
+  			}
+  	</style>
+  </head>
+  <body>
+  	<select onchange="update()" id ="paradigmSelect"></select>
+		  
+    <script type = "text/javascript">
+    // global variables
+    var w = 800; 
+    var h = 500; 
+    var radius = 5;
+    var hpadding = 20; 
+    var wpadding = 40;
+    var data;
+    var svg;
+    var xAxis; 
+    var yAxis;
+    var gx; 
+    var gy;
+
+    // import data.json with static declarations
+    d3.json("data.json", function(d)
+    {
+        // create svg element 
+        data = d;
+        svg = d3.select("body")
+              .append("svg")
+              .attr("width", w)
+              .attr("height", h);
+
+        // Compute the set of all paradigms in the data set.
+        // a list of all paradigm names
+        var paradigms = _.map(data, function(d) {return d.paradigms;});
+        // flatten paradigm array 
+        var flatten = _.flatten(paradigms);
+        // remove duplicates 
+        var unique_paradigms = _.uniq(flatten);
+
+        // Add all paradigms to the html element
+        var paradigmSelect = d3.select("#paradigmSelect");
+        paradigmSelect.selectAll("option")
+                      .data(unique_paradigms)
+                      .enter().append("option")
+                      .text(function(d) {return d});
+
+        // Define xAxis 
+        xAxis = d3.svg.axis()
+                .orient("bottom")
+                .tickFormat(d3.format("d"))
+
+        // Define yAxis 
+        yAxis = d3.svg.axis()
+               
+                .orient("left")
+                .ticks(5)
+
+        // create xAxis 
+        gx = svg.append("g")
+                    .attr("class", "axis")
+                    .attr("transform", "translate(0," + (h - hpadding) + ")"); // pushes axis to the bottom
+                   
+
+        //create yAxis
+        gy = svg.append("g")
+                .attr("class", "axis")
+                .attr("transform", "translate(" + wpadding + ",0)"); // pushes axis to the bottom 
+
+        // label xAxis as Year
+        var labelX = svg.append("text")
+            .attr("x", w-wpadding)
+            .attr("y", h-5)
+            .style("text-anchor", "middle")
+            .text("year");
+
+        // label yAxis as Repositories
+        var labelY = svg.append("text")
+            .attr("y",18)
+            .attr("x",50)
+            .style("text-anchor", "middle")
+            .text("Repositories");
+
+      // calls update for every selected paradigm 
+      update();
+      
+    })
+
+    // update function - includes declarations that are modified for each selected paradigm.  
+    function update()
+    {
+      // console.log('update called');
+      var selectEl = document.getElementById("paradigmSelect")
+      var type = selectEl[selectEl.selectedIndex].value;  
+
+            //gather data year and repos of selected paradigm
+            var filter_data = _.filter(data, function(d){ return _.contains(d.paradigms, type)});
+
+            // create svg circle element 
+            var circle = svg.selectAll("circle")
+                            .data(filter_data, function(d) {return d.name;});
+
+            // create xScale.  xScale is a function value that can pass d.date values. 
+            var min_year = d3.min(filter_data, function(d) {return d.year -1; });
+            var max_year = d3.max(filter_data, function(d) {return d.year +1});
+            var xScale = d3.scale.linear()
+                        .domain([min_year-1, max_year+1])
+                        .range([wpadding, w-(wpadding * 2)]);
+
+            // create yScale.  yScale is a function value that can pass d.nbRepos values. 
+            var min_nbRepos = d3.min(filter_data, function(d) {return d.nbRepos -1;});
+            var max_nbRepos = d3.max(filter_data, function(d) {return d.nbRepos +1;}); 
+            var yScale = d3.scale.log()
+                        .domain([min_nbRepos, max_nbRepos])
+                        .range([h- hpadding, hpadding]);
+
+            // Extra Credit modification: Store x(year) and y(nbRepos) coordinates, which will be used to identify 
+            // influence links
+            var xPos = {};
+            var yPos = {};
+            var linePositions = [];
+
+  
+            // Update selection of circle SVG element - existing data sets
+            circle
+                .transition().delay(500).duration(500)
+                // scale year and nbRepos by actual width and height of the svg element
+                // Extra credit modification: store x and y values to be access as values of xPos[d.name] and yPos[d.name
+                .attr("cx", function(d) {
+                  var x = xScale(d.year);
+                  xPos[d.name] = x;
+                  console.log("xPos " + d.name + ": " + x);
+                  return x; 
+                })
+
+                .attr("cy", function(d) {
+                  var y = yScale(d.nbRepos)
+                  yPos[d.name] = y;
+                  console.log("yPos " + d.name + ": " + y);
+                  return y;
+                });
+
+            // enter selection of circle SVG element- Data sets not part of the previous selection
+            circle.enter()
+                  .append("circle")
+                  .attr("fill", "white")
+                  .transition().delay(1000).duration(500)
+                  .attr("r", radius)
+                  .attr("cx", function(d) {
+                    var x = xScale(d.year);
+                    xPos[d.name] = x;
+                     console.log("xPos " + d.name + ": " + x);
+                    return x; })
+                  .attr("cy", function(d) {
+                    var y = yScale(d.nbRepos);
+                    yPos[d.name] = y;
+                    console.log("yPos " + d.name + ": " + y);
+                    return y; })
+                  .attr("fill", "teal");
+
+              // Extra credit modification: iterate through the data and for each name, iterate through its influence and store data.
+                _.each(filter_data, function(dataElement) {
+                    var start = dataElement.name; 
+                    var x1 = xPos[start];
+                    var y1 = yPos[start];
+                  _.each(dataElement.influenced, function(d){
+                    if (d in xPos) { 
+                      var x2 = xPos[d];
+                      var y2 = yPos[d];
+                      linePositions.push({
+                        "x1": x1,
+                        "y1": y1,
+                        "x2": x2, 
+                        "y2": y2, 
+                        "start": start, 
+                        "end" : d
+                        });
+                    }
+                    });
+                  });
+
+            // create line SVG element for linking influences
+            var line = svg.selectAll("line")
+                          .data(linePositions, function(d) {return d.start + d.end;});
+
+            // Remove lines that are not in the current paradigm
+            line.exit().transition().duration(500).attr("stroke", "white").remove();
+
+            // line's update selection with set transition and attr
+            line.transition().delay(500).duration(500)
+                                          .attr("x1", function(d) {return d.x1;})
+                                          .attr("y1", function(d) {return d.y1;})
+                                          .attr("x2", function(d) {return d.x2;})
+                                          .attr("y2", function(d) {return d.y2;});
+            // line's enter selection(Added line's that were not part of the previous selection) with set transition and attr
+            line.enter()
+                .append("line")
+                .attr("stroke", "white")
+                .transition().delay(1000).duration(500)
+                .attr("x1", function(d) {return d.x1;})
+                .attr("y1", function(d) {return d.y1;})
+                .attr("x2", function(d) {return d.x2;})
+                .attr("y2", function(d) {return d.y2;})
+                .attr("stroke", "black")
+                .attr("stroke-width", 0.3)
+                .attr("fill", "none");
+
+            // label each dot with corresponding language name 
+            var text = svg.selectAll(".languageLabel")
+                          .data(filter_data, function(d) {return d.name;});
+            
+            // text update selection transitions and attr
+            text
+                .text(function(d) {return d.name; })
+                .transition().delay(500).duration(500)
+                .attr("x", function(d) {return xScale(d.year); })
+                .attr("y", function(d) {return yScale(d.nbRepos); })
+                .attr("font-family", "sans-serif")
+                .attr("font-size", "11px")
+                .attr("fill", "black");
+
+            // text enter selection transitions and attr
+            text.enter()
+                .append("text")
+                .attr("class", "languageLabel")
+                .attr("fill", "white")
+                .transition().delay(1000).duration(500)
+                .text(function(d) { return d.name; })
+                .attr("x", function(d) {return xScale(d.year); })
+                .attr("y", function(d) {return yScale(d.nbRepos); })
+                .attr("font-family", "sans-serif")
+                .attr("font-size", "11px")
+                .attr("fill", "black");
+
+            // remove texts that are not in the particular paradigm
+            text.exit().transition()
+                        .duration(500)
+                        .attr("fill", "white")
+                        .remove();
+
+            //Scale Xaxis and Yaxis
+            xAxis.scale(xScale);
+            yAxis.scale(yScale);
+
+            //Call Y axis 
+            gx.transition().delay(500).duration(500).call(xAxis);
+
+            //call X axis
+            gy.transition().delay(500).duration(500).call(yAxis)
+
+            // remove elements that are not the particular paradigm with transition. 
+            circle.exit().transition()
+                          .duration(500)
+                          .attr("fill", "white")
+                          .remove(); // elements that are not binded to data are removed     
+      } 
+    </script>
+  </body>
+
+</html>
